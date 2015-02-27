@@ -1,15 +1,29 @@
 #include <pebble.h>
 
+bool init = true;
 Window *my_window;
 BitmapLayer *s_background_layer;
+Layer *s_progress_layer;
 TextLayer *s_dnloads_layer;
 TextLayer *s_time_layer;
 
 GFont *my_font;
 GBitmap *my_background;
 
-// Time updating
+// Upgrade Progressbar
+static void update_progressbar(struct Layer *layer, GContext *ctx){
+  static int i=0;
+  i+=5;
+  if (i>100) i=0;  
+  int pg = i*114/100;
+  APP_LOG(APP_LOG_LEVEL_INFO, "Update progress bar...");
+  graphics_context_set_stroke_color(ctx, GColorWhite);
+  graphics_draw_round_rect(ctx, GRect(0, 0, 120, 8), 2);
+  graphics_context_set_fill_color(ctx, GColorWhite);
+  graphics_draw_rect(ctx, GRect(3, 3, pg, 2));
+}
 
+// Time updating
 static void update_time(struct tm *tick_time){ 
   static char strbuf[] = "00:00";
   if (clock_is_24h_style()){
@@ -21,7 +35,11 @@ static void update_time(struct tm *tick_time){
 }
 
 static void tick_handler(struct tm *tick_time, TimeUnits units_changed){
-  update_time(tick_time);
+  if (init || (units_changed & MINUTE_UNIT)) {
+    update_time(tick_time);
+    init = false;
+  }
+  layer_mark_dirty(s_progress_layer);
 }
 
 
@@ -76,6 +94,11 @@ static void main_window_load(Window *window) {
   
   // Add time layer
   layer_add_child(window_get_root_layer(window), text_layer_get_layer(s_time_layer));
+ 
+  // Add Progress Bar
+  s_progress_layer = layer_create(GRect(10, 135, 120, 8));
+  layer_set_update_proc(s_progress_layer, update_progressbar);
+  layer_add_child(window_get_root_layer(window), s_progress_layer);
   
   APP_LOG(APP_LOG_LEVEL_INFO, "Init complete!");
   
@@ -84,6 +107,7 @@ static void main_window_load(Window *window) {
 static void main_window_unload(Window *window) {
   bitmap_layer_destroy(s_background_layer);
   text_layer_destroy(s_time_layer);
+  layer_destroy(s_progress_layer);
   fonts_unload_custom_font(my_font);
 }
 
@@ -95,7 +119,7 @@ void handle_init(void) {
     .unload = main_window_unload
   });
   
-  tick_timer_service_subscribe(MINUTE_UNIT, tick_handler);
+  tick_timer_service_subscribe(SECOND_UNIT, tick_handler);
   
   window_stack_push(my_window, true);
   
