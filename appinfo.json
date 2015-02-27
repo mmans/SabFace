@@ -13,14 +13,14 @@
     "resources": {
         "media": [
             {
-                "file": "images/menu.png",
-                "menuIcon": true,
-                "name": "IMAGE_TELEMANS_MENU",
+                "file": "images/watchface.png",
+                "name": "IMAGE_TELEMANS_FACE",
                 "type": "png"
             },
             {
-                "file": "images/watchface.png",
-                "name": "IMAGE_TELEMANS_FACE",
+                "file": "images/menu.png",
+                "menuIcon": true,
+                "name": "IMAGE_TELEMANS_MENU",
                 "type": "png"
             },
             {
@@ -30,6 +30,7 @@
             }
         ]
     },
+    "sdkVersion": "2",
     "shortName": "SabFace",
     "uuid": "6490229e-1b31-4504-9e77-4ed4c9879944",
     "versionCode": 1,

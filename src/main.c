@@ -4,7 +4,6 @@ Window *my_window;
 BitmapLayer *s_background_layer;
 TextLayer *s_dnloads_layer;
 TextLayer *s_time_layer;
-TextLayer *s_cr_layer;
 
 GFont *my_font;
 GBitmap *my_background;
@@ -78,18 +77,6 @@ static void main_window_load(Window *window) {
   // Add time layer
   layer_add_child(window_get_root_layer(window), text_layer_get_layer(s_time_layer));
   
-  // Add copyright layer
-  s_cr_layer = text_layer_create(GRect(0, 153, 144, 15));
-  text_layer_set_text(s_cr_layer, "©2015 Marco Mans");
-  text_layer_set_font(s_cr_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14));
-  text_layer_set_background_color(s_cr_layer, GColorClear);
-  
-  // Format copyright layer
-  text_layer_set_text_alignment(s_cr_layer, GTextAlignmentCenter);
-  
-  // Add copyright layer
-  layer_add_child(window_get_root_layer(window), text_layer_get_layer(s_cr_layer));
-  
   APP_LOG(APP_LOG_LEVEL_INFO, "Init complete!");
   
 }
@@ -97,7 +84,6 @@ static void main_window_load(Window *window) {
 static void main_window_unload(Window *window) {
   bitmap_layer_destroy(s_background_layer);
   text_layer_destroy(s_time_layer);
-  text_layer_destroy(s_cr_layer);
   fonts_unload_custom_font(my_font);
 }
 

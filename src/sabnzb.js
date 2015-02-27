@@ -8,6 +8,14 @@ var sabMeta = {
   baseAUrl : '',
   valid    : false,
 }; 
+var sabData = {
+  downloads : 0,
+  timeleft : '0:00:00',
+  mbtotal : 0.0,
+  mbleft : 0.0,
+  paused : false,
+  speed : 0
+};
 
 var xhrRequest = function (url, type, callback) {
   var xhr = new XMLHttpRequest();
@@ -20,7 +28,6 @@ var xhrRequest = function (url, type, callback) {
 
 function getAuthenticationMethod(){
   xhrRequest(sabMeta.baseUrl+"mode=auth", "GET", function(responseText){
-    console.log(responseText);
     switch(responseText.trim()){
       case "None":
         sabMeta.valid = true;
@@ -38,9 +45,31 @@ function getAuthenticationMethod(){
         sabMeta.valid = false;
         break;
     }       
-    console.log("Valid " + sabMeta.valid);
-    console.log("Base AUrl = " + sabMeta.baseAUrl);
+    if (sabMeta.valid) updateSabData();
   });
+}
+
+
+function updateSabData(){
+  console.log('Updating SabData...');
+  xhrRequest(sabMeta.baseAUrl+"mode=qstatus&output=json", "GET", function(responseText){
+    console.log(responseText);
+    var json = JSON.parse(responseText);
+    sabData.mbtotal = json.mb;
+    sabData.mbleft = json.mbleft;
+    sabData.downloads = json.jobs.length;
+    sabData.timeleft = json.timeleft;
+    sabData.paused = json.paused;
+    sabData.speed = json.speed;
+    
+    console.log('mbtotal : '+sabData.mbtotal);
+    console.log('mbleft : '+sabData.mbleft);
+    console.log('downloads : '+sabData.downloads);
+    console.log('timeleft : '+sabData.timeleft);
+    console.log('speed : '+sabData.speed);
+  });
+  
+  
 }
 
 Pebble.addEventListener('ready', 
@@ -56,5 +85,10 @@ Pebble.addEventListener('ready',
 Pebble.addEventListener('appmessage',
   function(e) {
     console.log("AppMessage received!");
+    if (sabMeta.valid){
+      updateSabData();
+    } else {
+      getAuthenticationMethod();
+    }
   }                     
 );
