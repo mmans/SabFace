@@ -60,7 +60,7 @@ function updateSabData(){
     sabData.downloads = json.jobs.length;
     sabData.timeleft = json.timeleft;
     sabData.paused = json.paused;
-    sabData.speed = json.speed;
+    sabData.speed = json.speed.trim();
     if (sabData.mbtotal>0){
       sabData.procleft = Math.round((sabData.mbleft / sabData.mbtotal)*100);
     }

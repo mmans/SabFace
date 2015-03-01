@@ -22,15 +22,25 @@
                 "type": "png"
             },
             {
-                "file": "images/menu.png",
-                "menuIcon": true,
-                "name": "IMAGE_TELEMANS_MENU",
+                "file": "images/bolt-2x.png",
+                "name": "IMAGE_TELEMANS_SPEED_ICON",
+                "type": "png"
+            },
+            {
+                "file": "images/dnload_icon.png",
+                "name": "IMAGE_TELEMANS_DNLOAD_ICON",
                 "type": "png"
             },
             {
                 "file": "fonts/Capture_it.ttf",
                 "name": "FONT_TELEMANS_CAPTURE_IT_48",
                 "type": "font"
+            },
+            {
+                "file": "images/menu.png",
+                "menuIcon": true,
+                "name": "IMAGE_TELEMANS_MENU",
+                "type": "png"
             }
         ]
     },
