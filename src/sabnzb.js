@@ -62,9 +62,8 @@ function updateSabData(){
     sabData.paused = json.paused;
     sabData.speed = json.speed;
     if (sabData.mbtotal>0){
-      sabData.procleft = Math.round(sabData.mbleft / sabData.mbtotal);
+      sabData.procleft = Math.round((sabData.mbleft / sabData.mbtotal)*100);
     }
-    console.log("Procent Left: " + sabData.procleft);
     sendDataToPebble();
   });
   
