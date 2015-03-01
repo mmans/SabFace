@@ -1,8 +1,12 @@
 {
     "appKeys": {
-        "KEY_MB_LEFT": 1,
-        "KEY_QUEUE_SIZE": 0,
-        "KEY_TIME_LEFT": 2
+        "KEY_DOWNLOADS": 3,
+        "KEY_MB_LEFT": 2,
+        "KEY_MB_TOTAL": 1,
+        "KEY_PROC_LEFT": 6,
+        "KEY_SPEED": 5,
+        "KEY_TIME_LEFT": 4,
+        "KEY_VALID_CONNECTION": 0
     },
     "capabilities": [
         ""

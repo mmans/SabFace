@@ -11,10 +11,11 @@ var sabMeta = {
 var sabData = {
   downloads : 0,
   timeleft : '0:00:00',
-  mbtotal : 0.0,
-  mbleft : 0.0,
+  mbtotal : 0,
+  mbleft : 0,
   paused : false,
-  speed : 0
+  speed : 0,
+  procleft : 0
 };
 
 var xhrRequest = function (url, type, callback) {
@@ -53,24 +54,45 @@ function getAuthenticationMethod(){
 function updateSabData(){
   console.log('Updating SabData...');
   xhrRequest(sabMeta.baseAUrl+"mode=qstatus&output=json", "GET", function(responseText){
-    console.log(responseText);
     var json = JSON.parse(responseText);
-    sabData.mbtotal = json.mb;
-    sabData.mbleft = json.mbleft;
+    sabData.mbtotal = json.mb * 100;
+    sabData.mbleft = json.mbleft * 100;
     sabData.downloads = json.jobs.length;
     sabData.timeleft = json.timeleft;
     sabData.paused = json.paused;
     sabData.speed = json.speed;
-    
-    console.log('mbtotal : '+sabData.mbtotal);
-    console.log('mbleft : '+sabData.mbleft);
-    console.log('downloads : '+sabData.downloads);
-    console.log('timeleft : '+sabData.timeleft);
-    console.log('speed : '+sabData.speed);
+    if (sabData.mbtotal>0){
+      sabData.procleft = Math.round(sabData.mbleft / sabData.mbtotal);
+    }
+    console.log("Procent Left: " + sabData.procleft);
+    sendDataToPebble();
   });
   
   
 }
+
+function sendDataToPebble(){
+  var dict = {
+    "KEY_VALID_CONNECTION" : sabMeta.valid,
+    "KEY_MB_TOTAL" : sabData.mbtotal,
+    "KEY_MB_LEFT" : sabData.mbleft,
+    "KEY_DOWNLOADS" : sabData.downloads,
+    "KEY_TIME_LEFT" : sabData.timeleft,
+    "KEY_SPEED" : sabData.speed,
+    "KEY_PROC_LEFT" : sabData.procleft
+  };
+  
+  Pebble.sendAppMessage(dict,
+    function(e){
+      console.log("Data send successfull!");
+    },
+    function(e){
+      console.log("Error while sending data!");
+    });
+}
+
+
+
 
 Pebble.addEventListener('ready', 
   function(e) {

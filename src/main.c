@@ -1,4 +1,11 @@
 #include <pebble.h>
+#define KEY_VALID_CONNECTION  0
+#define KEY_MB_TOTAL 1
+#define KEY_MB_LEFT 2
+#define KEY_DOWNLOADS 3
+#define KEY_TIME_LEFT 4
+#define KEY_SPEED 5
+#define KEY_PROC_LEFT 6
 
 bool init = true;
 Window *my_window;
@@ -10,13 +17,21 @@ TextLayer *s_time_layer;
 GFont *my_font;
 GBitmap *my_background;
 
+static int tick_counter = 0;
+static bool sab_valid_connection = false;
+static uint32_t sab_mb_total = 0;
+static uint32_t sab_mb_left = 0;
+static int sab_downloads = 0;
+static char sab_time_left[8] = "00:00:00";
+static char sab_speed[15] = "";
+static int sab_proc_left = 0;
+
 // Upgrade Progressbar
 static void update_progressbar(struct Layer *layer, GContext *ctx){
   static int i=0;
   i+=5;
   if (i>100) i=0;  
   int pg = i*114/100;
-  APP_LOG(APP_LOG_LEVEL_INFO, "Update progress bar...");
   graphics_context_set_stroke_color(ctx, GColorWhite);
   graphics_draw_round_rect(ctx, GRect(0, 0, 120, 8), 2);
   graphics_context_set_fill_color(ctx, GColorWhite);
@@ -39,13 +54,69 @@ static void tick_handler(struct tm *tick_time, TimeUnits units_changed){
     update_time(tick_time);
     init = false;
   }
-  layer_mark_dirty(s_progress_layer);
+  tick_counter++;
+  if (tick_counter>10){
+    tick_counter=0;
+    // Begin dictionary
+    DictionaryIterator *iter;
+    app_message_outbox_begin(&iter);
+
+    // Add a key-value pair
+    dict_write_uint8(iter, 0, 0);
+
+    // Send the message!
+    app_message_outbox_send();
+  }
 }
 
 
 // Communication
 
 static void inbox_received_callback(DictionaryIterator *iterator, void *context) {
+ // Read first item
+  Tuple *t = dict_read_first(iterator);
+
+  // For all items
+  while(t != NULL) {
+    // Which key was received?
+    switch(t->key) {
+    case KEY_VALID_CONNECTION: 
+      sab_valid_connection = (bool) t->value;
+      break;
+    case KEY_MB_TOTAL:
+      sab_mb_total = t->value->uint32;
+      break;
+    case KEY_MB_LEFT:
+      sab_mb_left = t->value->uint32;
+      break;
+    case KEY_DOWNLOADS:
+      sab_downloads = t->value->int32;
+      break;
+    case KEY_TIME_LEFT:
+      snprintf(sab_time_left, sizeof(sab_time_left), "%s", t->value->cstring);
+      break;
+    case KEY_SPEED:
+      snprintf(sab_speed, sizeof(sab_speed), "%s", t->value->cstring);
+      break;
+    case KEY_PROC_LEFT:
+      sab_proc_left = t->value->int16;
+      break;
+    default:
+      APP_LOG(APP_LOG_LEVEL_ERROR, "Key %d not recognized!", (int)t->key);
+      break;
+    }
+    
+    // Look for next item
+    t = dict_read_next(iterator);
+  }
+  
+  APP_LOG(APP_LOG_LEVEL_INFO, "Valid Connection = %d", sab_valid_connection);
+  APP_LOG(APP_LOG_LEVEL_INFO, "MB Total = %lu", sab_mb_total);
+  APP_LOG(APP_LOG_LEVEL_INFO, "MB Left = %lu", sab_mb_left);
+  APP_LOG(APP_LOG_LEVEL_INFO, "Downloads = %d", sab_downloads);
+  APP_LOG(APP_LOG_LEVEL_INFO, "Time Left = %s", sab_time_left);
+  APP_LOG(APP_LOG_LEVEL_INFO, "Speed = %s", sab_speed);
+  APP_LOG(APP_LOG_LEVEL_INFO, "Proc Left = %d", sab_proc_left);
 
 }
 
