@@ -9,7 +9,7 @@
         "KEY_VALID_CONNECTION": 0
     },
     "capabilities": [
-        ""
+        "configurable"
     ],
     "companyName": "Telemans",
     "longName": "SabNZB Watchface",

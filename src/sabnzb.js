@@ -102,6 +102,13 @@ Pebble.addEventListener('ready',
   }
 );
 
+Pebble.addEventListener("showConfiguration",
+  function(e) {
+    //Load the remote config page
+    Pebble.openURL("http://pebble.telemans.de/sabface-config.html");
+  }
+);
+
 // Listen for when an AppMessage is received
 Pebble.addEventListener('appmessage',
   function(e) {

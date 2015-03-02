@@ -213,6 +213,7 @@ static void main_window_load(Window *window) {
  
   // Add Progress Bar
   s_progress_layer = layer_create(GRect(10, 125, 120, 8));
+  layer_set_hidden(s_progress_layer, true);
   layer_set_update_proc(s_progress_layer, update_progressbar);
   layer_add_child(window_get_root_layer(window), s_progress_layer);
 
@@ -248,6 +249,7 @@ static void main_window_load(Window *window) {
 
   // Add Time Left Layer
   s_time_left_layer = text_layer_create(GRect(10, 135, 120, 18));
+  layer_set_hidden(text_layer_get_layer(s_time_left_layer), true);
   text_layer_set_text(s_time_left_layer, "00:00:00");
   text_layer_set_font(s_time_left_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18));
   text_layer_set_text_alignment(s_time_left_layer, GTextAlignmentCenter);
