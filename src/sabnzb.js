@@ -17,6 +17,10 @@ var sabData = {
   speed : 0,
   procleft : 0
 };
+var sabConfig = {
+  sab_url: '',
+  sab_apikey: '',
+};
 
 var xhrRequest = function (url, type, callback) {
   var xhr = new XMLHttpRequest();
@@ -104,6 +108,7 @@ Pebble.addEventListener('ready',
 
 Pebble.addEventListener("showConfiguration",
   function(e) {
+    console.log('Show Config');
     //Load the remote config page
     Pebble.openURL("http://pebble.telemans.de/sabface-config.html");
   }
@@ -112,11 +117,23 @@ Pebble.addEventListener("showConfiguration",
 // Listen for when an AppMessage is received
 Pebble.addEventListener('appmessage',
   function(e) {
-    console.log("AppMessage received!");
-    if (sabMeta.valid){
-      updateSabData();
-    } else {
-      getAuthenticationMethod();
-    }
+    var cmd_type=0;
+    cmd_type = e.payload.CMD_TYPE;
+    console.log("AppMessage received --> " + cmd_type);
+    
+    switch (cmd_type){
+      case 1:
+        // Update data
+        if (sabMeta.valid){
+          updateSabData();
+        } else {
+          getAuthenticationMethod();
+        }
+      break;
+    case 2:
+        // Receiving configuration
+        console.log(e.payload.CONFIG_SAB_URL);
+        break;
+  }
   }                     
 );

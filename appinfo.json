@@ -1,5 +1,8 @@
 {
     "appKeys": {
+        "CMD_TYPE": 7,
+        "CONFIG_SAB_APIKEY": 9,
+        "CONFIG_SAB_URL": 8,
         "KEY_DOWNLOADS": 3,
         "KEY_MB_LEFT": 2,
         "KEY_MB_TOTAL": 1,

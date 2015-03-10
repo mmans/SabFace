@@ -6,7 +6,11 @@
 #define KEY_TIME_LEFT 4
 #define KEY_SPEED 5
 #define KEY_PROC_LEFT 6
-
+#define CMD_TYPE 7
+#define CONFIG_SAB_URL 9
+#define CONFIG_SAB_APIKEY 10
+  
+  
 bool init = true;
 Window *my_window;
 BitmapLayer *s_background_layer;
@@ -67,14 +71,35 @@ static void tick_handler(struct tm *tick_time, TimeUnits units_changed){
     DictionaryIterator *iter;
     app_message_outbox_begin(&iter);
 
+    //CMD_TYPE:
+    // 1 = Update data
+    // 2 = Send Config
+    
     // Add a key-value pair
-    dict_write_uint8(iter, 0, 0);
+    dict_write_uint8(iter, CMD_TYPE, 1);
 
     // Send the message!
     app_message_outbox_send();
   }
 }
 
+static void send_configuration(){
+    APP_LOG(APP_LOG_LEVEL_INFO, "Sending configuration");
+    // Begin dictionary
+    DictionaryIterator *iter;
+    app_message_outbox_begin(&iter);
+
+    //CMD_TYPE:
+    // 1 = Update data
+    // 2 = Send Config
+    
+    // Add a key-value pair
+    dict_write_uint8(iter, CMD_TYPE, 2);
+    dict_write_cstring(iter, CONFIG_SAB_URL, "test");
+    
+    // Send the message!
+    app_message_outbox_send();  
+}
 
 // Communication
 
@@ -293,6 +318,9 @@ void handle_init(void) {
   
   // Open AppMessage
   app_message_open(app_message_inbox_size_maximum(), app_message_outbox_size_maximum());
+  
+  // Send Config to Phone
+  send_configuration();
 }
 
 void handle_deinit(void) {
