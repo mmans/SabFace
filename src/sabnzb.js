@@ -95,8 +95,9 @@ function sendDataToPebble(){
 }
 
 
-
-
+/*
+  Watchface is loaded successfully
+*/
 Pebble.addEventListener('ready', 
   function(e) {
     console.log("PebbleKit JS ready!");
@@ -106,6 +107,9 @@ Pebble.addEventListener('ready',
   }
 );
 
+/*
+  User wants to open configuration
+*/
 Pebble.addEventListener("showConfiguration",
   function(e) {
     console.log('Show Config');

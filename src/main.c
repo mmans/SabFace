@@ -32,7 +32,7 @@ static int tick_counter = 0;
 static bool sab_valid_connection = false;
 static uint32_t sab_mb_total = 0;
 static uint32_t sab_mb_left = 0;
-static int sab_downloads_prev = 0;
+static int sab_downloads_prev = -1;
 static int sab_downloads = 0;
 static char sab_downloads_txt[3] = "000";
 static char sab_time_left[8] = "00:00:00";
@@ -142,15 +142,7 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
     t = dict_read_next(iterator);
   }
   
-//   APP_LOG(APP_LOG_LEVEL_INFO, "Valid Connection = %d", sab_valid_connection);
-//   APP_LOG(APP_LOG_LEVEL_INFO, "MB Total = %lu", sab_mb_total);
-//   APP_LOG(APP_LOG_LEVEL_INFO, "MB Left = %lu", sab_mb_left);
-//   APP_LOG(APP_LOG_LEVEL_INFO, "Downloads = %d", sab_downloads);
-//   APP_LOG(APP_LOG_LEVEL_INFO, "Time Left = %s", sab_time_left);
-//   APP_LOG(APP_LOG_LEVEL_INFO, "Speed = %s", sab_speed);
-//   APP_LOG(APP_LOG_LEVEL_INFO, "Proc Left = %d", sab_proc_left);
-
-  if (sab_downloads > sab_downloads_prev){
+  if ((sab_downloads_prev>-1) && (sab_downloads > sab_downloads_prev)){
     // New download detected
     vibes_short_pulse();
   } else if (sab_downloads < sab_downloads_prev){
@@ -245,12 +237,13 @@ static void main_window_load(Window *window) {
   // Add Speed icon
   icon_speed = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_TELEMANS_SPEED_ICON);
   s_speed_icon_layer = bitmap_layer_create(GRect(123, 12, 16, 16));
+  layer_set_hidden(bitmap_layer_get_layer(s_speed_icon_layer), true);
   bitmap_layer_set_bitmap(s_speed_icon_layer, icon_speed);
   layer_add_child(window_get_root_layer(window), bitmap_layer_get_layer(s_speed_icon_layer));
 
   // Add Speed text
   s_speed_layer = text_layer_create(GRect(55, 6, 64, 18));
-  text_layer_set_text(s_speed_layer, "0");
+  text_layer_set_text(s_speed_layer, "");
   text_layer_set_font(s_speed_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18));
   text_layer_set_text_alignment(s_speed_layer, GTextAlignmentRight);
   text_layer_set_text_color(s_speed_layer, GColorWhite);
@@ -260,12 +253,13 @@ static void main_window_load(Window *window) {
   // Add Downloads icon
   icon_downloads = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_TELEMANS_DNLOAD_ICON);
   s_downloads_icon_layer = bitmap_layer_create(GRect(5, 12, 16, 16));
+  layer_set_hidden(bitmap_layer_get_layer(s_downloads_icon_layer), true);
   bitmap_layer_set_bitmap(s_downloads_icon_layer, icon_downloads);
   layer_add_child(window_get_root_layer(window), bitmap_layer_get_layer(s_downloads_icon_layer));
 
   // Add Downloads text
   s_downloads_layer = text_layer_create(GRect(25, 6, 30, 18));
-  text_layer_set_text(s_downloads_layer, "0");
+  text_layer_set_text(s_downloads_layer, "");
   text_layer_set_font(s_downloads_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18));
   text_layer_set_text_alignment(s_downloads_layer, GTextAlignmentLeft);
   text_layer_set_text_color(s_downloads_layer, GColorWhite);
@@ -274,8 +268,7 @@ static void main_window_load(Window *window) {
 
   // Add Time Left Layer
   s_time_left_layer = text_layer_create(GRect(10, 135, 120, 18));
-  layer_set_hidden(text_layer_get_layer(s_time_left_layer), true);
-  text_layer_set_text(s_time_left_layer, "00:00:00");
+  text_layer_set_text(s_time_left_layer, "");
   text_layer_set_font(s_time_left_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18));
   text_layer_set_text_alignment(s_time_left_layer, GTextAlignmentCenter);
   text_layer_set_text_color(s_time_left_layer, GColorWhite);
