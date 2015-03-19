@@ -1,10 +1,5 @@
-var host = "ed2oyecdfpgenbgy.myfritz.net";
-var port = "20378";
-var apikey = "848da14248a198fe4032209c3de39453";
-var username = "admin";
-var password = "test";
 var sabMeta = {
-  baseUrl  : '',
+  baseUrl : '',
   baseAUrl : '',
   valid    : false,
 }; 
@@ -17,9 +12,18 @@ var sabData = {
   speed : 0,
   procleft : 0
 };
+
 var sabConfig = {
-  sab_url: '',
-  sab_apikey: '',
+  sab_use_ssl : false,
+  sab_host : 'ed2oyecdfpgenbgy.myfritz.net',
+  sab_port : 20378,
+  sab_apikey : '848da14248a198fe4032209c3de39453',
+  sab_username : 'admin',
+  sab_password : 'ild!98',
+  watch_vibrateOnNewDownload: true,
+	watch_vibrateOnDownloadFinished: true,
+	watch_intervalIdle: 900,
+	watch_intervalActive: 10
 };
 
 var xhrRequest = function (url, type, callback) {
@@ -32,6 +36,15 @@ var xhrRequest = function (url, type, callback) {
 };
 
 function getAuthenticationMethod(){
+  if (sabConfig.use_ssl){
+    sabMeta.baseUrl = "https://";
+  } else {
+    sabMeta.baseUrl = "http://";
+  }
+  
+  sabMeta.baseUrl += sabConfig.sab_host+":"+sabConfig.sab_port+"/sabnzbd/api?";
+  console.log("Base Url = " + sabMeta.baseUrl);
+
   xhrRequest(sabMeta.baseUrl+"mode=auth", "GET", function(responseText){
     switch(responseText.trim()){
       case "None":
@@ -40,11 +53,11 @@ function getAuthenticationMethod(){
         break;
       case "apikey":
         sabMeta.valid = true;
-        sabMeta.baseAUrl = sabMeta.baseUrl+"apikey="+apikey+"&";
+        sabMeta.baseAUrl = sabMeta.baseUrl+"apikey="+sabConfig.sab_apikey+"&";
         break;
       case "login":
         sabMeta.valid = true;
-        sabMeta.baseAUrl = sabMeta.baseUrl+"ma_username="+username+"&ma_password="+password+"&";
+        sabMeta.baseAUrl = sabMeta.baseUrl+"ma_username="+sabConfig.sab_username+"&ma_password="+sabConfig.sab_password+"&";
         break;
       default:
         sabMeta.valid = false;
@@ -101,8 +114,6 @@ function sendDataToPebble(){
 Pebble.addEventListener('ready', 
   function(e) {
     console.log("PebbleKit JS ready!");
-    sabMeta.baseUrl = "http://"+host+":"+port+"/sabnzbd/api?";
-    console.log("Base Url = " + sabMeta.baseUrl);
     getAuthenticationMethod();
   }
 );
@@ -113,8 +124,27 @@ Pebble.addEventListener('ready',
 Pebble.addEventListener("showConfiguration",
   function(e) {
     console.log('Show Config');
+    var configJson = encodeURIComponent(JSON.stringify(sabConfig));
+    console.log("Opening url: " + "http://pebble.telemans.de/sabface-config.html#/?config="+configJson);
     //Load the remote config page
-    Pebble.openURL("http://pebble.telemans.de/sabface-config.html");
+    Pebble.openURL("http://pebble.telemans.de/sabface-config.html#/?config="+configJson);
+  }
+);
+
+/* 
+  New configuration received from webview
+*/
+Pebble.addEventListener('webviewclosed',
+  function(e) {
+    console.log('Configuration window returned: ' + e.response);
+    if (e.response == 'cancel'){
+      // User clicked cancel
+      console.log("User Clicked CANCEL");
+    } else {
+      sabConfig = JSON.parse(decodeURIComponent(e.response));
+      sabMeta.valid = false;
+      sendConfigToPebble();
+    }
   }
 );
 
@@ -136,8 +166,41 @@ Pebble.addEventListener('appmessage',
       break;
     case 2:
         // Receiving configuration
-        console.log(e.payload.CONFIG_SAB_URL);
+        sabConfig.sab_use_ssl = e.payload.CONFIG_SAB_USE_SSL;
+        sabConfig.sab_host = e.payload.CONFIG_SAB_HOST;
+        sabConfig.sab_port = e.payload.CONFIG_SAB_PORT;
+        sabConfig.sab_apikey = e.payload.CONFIG_SAB_APIKEY;
+        sabConfig.sab_username = e.payload.CONFIG_SAB_USERNAME;
+        sabConfig.sab_password = e.payload.CONFIG_SAB_PASSWORD;
+        sabConfig.watch_vibrateOnNewDownload = e.payload.CONFIG_WATCH_VIB_NEW;
+        sabConfig.watch_vibrateOnDownloadFinished = e.payload.CONFIG_WATCH_VIB_FIN;
+        sabConfig.watch_intervalIdle = e.payload.CONFIG_WATCH_INT_IDLE;
+        sabConfig.watch_intervalActive = e.payload.CONFIG_WATCH_INT_ACTIVE;
         break;
   }
   }                     
 );
+
+function sendConfigToPebble(){
+  var dict = {
+    "CONFIG_SAB_USE_SSL" : sabConfig.sab_use_ssl,
+    "CONFIG_SAB_HOST" : sabConfig.sab_host,
+    "CONFIG_SAB_PORT" : sabConfig.sab_port,
+    "CONFIG_SAB_APIKEY" : sabConfig.sab_apikey,
+    "CONFIG_SAB_USERNAME" : sabConfig.sab_username,
+    "CONFIG_SAB_PASSWORD" : sabConfig.sab_password,
+    "CONFIG_WATCH_VIB_NEW" : sabConfig.watch_vibrateOnNewDownload,
+    "CONFIG_WATCH_VIB_FIN" : sabConfig.watch_vibrateOnDownloadFinished,
+    "CONFIG_WATCH_INT_IDLE" : sabConfig.watch_intervalIdle,
+    "CONFIG_WATCH_INT_ACTIVE" : sabConfig.watch_intervalActive
+  };
+  
+  Pebble.sendAppMessage(dict,
+    function(e){
+      console.log("Data send successfull!");
+    },
+    function(e){
+      console.log("Error while sending data!");
+    });
+  
+}

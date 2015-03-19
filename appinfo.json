@@ -1,8 +1,16 @@
 {
     "appKeys": {
         "CMD_TYPE": 7,
-        "CONFIG_SAB_APIKEY": 9,
-        "CONFIG_SAB_URL": 8,
+        "CONFIG_SAB_APIKEY": 11,
+        "CONFIG_SAB_HOST": 9,
+        "CONFIG_SAB_PASSWORD": 13,
+        "CONFIG_SAB_PORT": 10,
+        "CONFIG_SAB_USERNAME": 12,
+        "CONFIG_SAB_USE_SSL": 8,
+        "CONFIG_WATCH_INT_ACTIVE": 17,
+        "CONFIG_WATCH_INT_IDLE": 16,
+        "CONFIG_WATCH_VIB_FIN": 15,
+        "CONFIG_WATCH_VIB_NEW": 14,
         "KEY_DOWNLOADS": 3,
         "KEY_MB_LEFT": 2,
         "KEY_MB_TOTAL": 1,

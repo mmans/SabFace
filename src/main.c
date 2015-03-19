@@ -1,3 +1,11 @@
+/*
+ TODO:
+   * Settings --> Struct
+   * Vib-settings
+   * Int-settings
+   * icon, not-connected
+*/
+
 #include <pebble.h>
 #define KEY_VALID_CONNECTION  0
 #define KEY_MB_TOTAL 1
@@ -7,9 +15,27 @@
 #define KEY_SPEED 5
 #define KEY_PROC_LEFT 6
 #define CMD_TYPE 7
-#define CONFIG_SAB_URL 9
-#define CONFIG_SAB_APIKEY 10
-  
+#define CONFIG_SAB_USE_SSL 8
+#define CONFIG_SAB_HOST 9
+#define CONFIG_SAB_PORT 10
+#define CONFIG_SAB_APIKEY 11
+#define CONFIG_SAB_USERNAME 12
+#define CONFIG_SAB_PASSWORD 13
+#define CONFIG_WATCH_VIB_NEW 14
+#define CONFIG_WATCH_VIB_FIN 15
+#define CONFIG_WATCH_INT_IDLE 16
+#define CONFIG_WATCH_INT_ACTIVE 17 
+
+static bool config_sab_use_ssl = false;
+static char config_sab_host[50] = "my.sabnzb.server";
+static int config_sab_port = 8080;
+static char config_sab_apikey[35] = "";
+static char config_sab_username[25] = "";
+static char config_sab_password[25] = "";
+static bool config_vibrate_new = false;
+static bool config_vibrate_finish = false;
+static int config_interval_idle = 900;
+static int config_interval_active = 10;
   
 bool init = true;
 Window *my_window;
@@ -83,6 +109,19 @@ static void tick_handler(struct tm *tick_time, TimeUnits units_changed){
   }
 }
 
+static void read_configuration(){
+  config_sab_use_ssl = persist_read_bool(CONFIG_SAB_USE_SSL);
+  persist_read_string(CONFIG_SAB_HOST, config_sab_host, sizeof(config_sab_host));
+  config_sab_port = persist_read_int(CONFIG_SAB_PORT);
+  persist_read_string(CONFIG_SAB_APIKEY, config_sab_apikey, sizeof(config_sab_apikey));
+  persist_read_string(CONFIG_SAB_USERNAME, config_sab_username, sizeof(config_sab_username));
+  persist_read_string(CONFIG_SAB_PASSWORD, config_sab_password, sizeof(config_sab_password));
+  config_vibrate_new = persist_read_bool(CONFIG_WATCH_VIB_NEW);
+  config_vibrate_finish = persist_read_bool(CONFIG_WATCH_VIB_FIN);
+  config_interval_idle = persist_read_int(CONFIG_WATCH_INT_IDLE);
+  config_interval_active = persist_read_int(CONFIG_WATCH_INT_ACTIVE);
+}
+
 static void send_configuration(){
     APP_LOG(APP_LOG_LEVEL_INFO, "Sending configuration");
     // Begin dictionary
@@ -95,53 +134,35 @@ static void send_configuration(){
     
     // Add a key-value pair
     dict_write_uint8(iter, CMD_TYPE, 2);
-    dict_write_cstring(iter, CONFIG_SAB_URL, "test");
-    
+    dict_write_int8(iter, CONFIG_SAB_USE_SSL, config_sab_use_ssl);
+    dict_write_cstring(iter, CONFIG_SAB_HOST, config_sab_host);
+    dict_write_int16(iter, CONFIG_SAB_PORT, config_sab_port);
+    dict_write_cstring(iter, CONFIG_SAB_APIKEY, config_sab_apikey);
+    dict_write_cstring(iter, CONFIG_SAB_USERNAME, config_sab_username);
+    dict_write_cstring(iter, CONFIG_SAB_PASSWORD, config_sab_password);
+    dict_write_int8(iter, CONFIG_WATCH_VIB_NEW, config_vibrate_new);
+    dict_write_int8(iter, CONFIG_WATCH_VIB_FIN, config_vibrate_finish);
+    dict_write_int16(iter, CONFIG_WATCH_INT_IDLE, config_interval_idle);
+    dict_write_int16(iter, CONFIG_WATCH_INT_ACTIVE, config_interval_active);
+  
     // Send the message!
     app_message_outbox_send();  
 }
 
-// Communication
+static void save_configuration(){
+  persist_write_bool(CONFIG_SAB_USE_SSL, config_sab_use_ssl);
+  persist_write_string(CONFIG_SAB_HOST, config_sab_host);
+  persist_write_int(CONFIG_SAB_PORT, config_sab_port);
+  persist_write_string(CONFIG_SAB_APIKEY, config_sab_apikey);
+  persist_write_string(CONFIG_SAB_USERNAME, config_sab_username);
+  persist_write_string(CONFIG_SAB_PASSWORD, config_sab_password);
+  persist_write_bool(CONFIG_WATCH_VIB_NEW, config_vibrate_new);
+  persist_write_bool(CONFIG_WATCH_VIB_FIN, config_vibrate_finish);
+  persist_write_int(CONFIG_WATCH_INT_IDLE, config_interval_idle);
+  persist_write_int(CONFIG_WATCH_INT_ACTIVE, config_interval_active);
+}
 
-static void inbox_received_callback(DictionaryIterator *iterator, void *context) {
- // Read first item
-  Tuple *t = dict_read_first(iterator);
-
-  // For all items
-  while(t != NULL) {
-    // Which key was received?
-    switch(t->key) {
-    case KEY_VALID_CONNECTION: 
-      sab_valid_connection = (bool) t->value;
-      break;
-    case KEY_MB_TOTAL:
-      sab_mb_total = t->value->uint32;
-      break;
-    case KEY_MB_LEFT:
-      sab_mb_left = t->value->uint32;
-      break;
-    case KEY_DOWNLOADS:
-      sab_downloads = t->value->int32;
-      snprintf(sab_downloads_txt, sizeof(sab_downloads_txt), "%d", sab_downloads);
-      break;
-    case KEY_TIME_LEFT:
-      snprintf(sab_time_left, sizeof(sab_time_left), "%s", t->value->cstring);
-      break;
-    case KEY_SPEED:
-      snprintf(sab_speed, sizeof(sab_speed), "%s", t->value->cstring);
-      break;
-    case KEY_PROC_LEFT:
-      sab_proc_left = t->value->int16;
-      break;
-    default:
-      APP_LOG(APP_LOG_LEVEL_ERROR, "Key %d not recognized!", (int)t->key);
-      break;
-    }
-    
-    // Look for next item
-    t = dict_read_next(iterator);
-  }
-  
+static void updateDataOnScreen(){
   if ((sab_downloads_prev>-1) && (sab_downloads > sab_downloads_prev)){
     // New download detected
     vibes_short_pulse();
@@ -181,6 +202,89 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
   }
   
 }
+
+// Communication
+
+static void inbox_received_callback(DictionaryIterator *iterator, void *context) {
+ // Read first item
+  Tuple *t = dict_read_first(iterator);
+  
+  bool configReceived = false;
+  
+  // For all items
+  while(t != NULL) {
+    // Which key was received?
+    switch(t->key) {
+    case KEY_VALID_CONNECTION: 
+      sab_valid_connection = (bool) t->value;
+      break;
+    case KEY_MB_TOTAL:
+      sab_mb_total = t->value->uint32;
+      break;
+    case KEY_MB_LEFT:
+      sab_mb_left = t->value->uint32;
+      break;
+    case KEY_DOWNLOADS:
+      sab_downloads = t->value->int32;
+      snprintf(sab_downloads_txt, sizeof(sab_downloads_txt), "%d", sab_downloads);
+      break;
+    case KEY_TIME_LEFT:
+      snprintf(sab_time_left, sizeof(sab_time_left), "%s", t->value->cstring);
+      break;
+    case KEY_SPEED:
+      snprintf(sab_speed, sizeof(sab_speed), "%s", t->value->cstring);
+      break;
+    case KEY_PROC_LEFT:
+      sab_proc_left = t->value->int16;
+      break;
+    case CONFIG_SAB_USE_SSL:
+      config_sab_use_ssl = t->value->int8;
+      break;
+    case CONFIG_SAB_HOST:
+      snprintf(config_sab_host, sizeof(config_sab_host), "%s", t->value->cstring);
+      break;
+    case CONFIG_SAB_PORT:
+      config_sab_port = t->value->int16;
+      break;
+    case CONFIG_SAB_APIKEY:
+      snprintf(config_sab_apikey, sizeof(config_sab_apikey), "%s", t->value->cstring);
+      break;
+    case CONFIG_SAB_USERNAME:
+      snprintf(config_sab_username, sizeof(config_sab_username), "%s", t->value->cstring);
+      break;
+    case CONFIG_SAB_PASSWORD:
+      snprintf(config_sab_password, sizeof(config_sab_password), "%s", t->value->cstring);
+      break;
+    case CONFIG_WATCH_VIB_NEW:
+      config_vibrate_new = t->value->int8;
+      break;
+    case CONFIG_WATCH_VIB_FIN:
+      config_vibrate_finish = t->value->int8;
+      break;
+    case CONFIG_WATCH_INT_IDLE:
+      config_interval_idle = t->value->int16;
+      break;
+    case CONFIG_WATCH_INT_ACTIVE:
+      config_interval_active = t->value->int16;
+      break;
+    
+    default:
+      APP_LOG(APP_LOG_LEVEL_ERROR, "Key %d not recognized!", (int)t->key);
+      break;
+    }
+    
+    // Look for next item
+    t = dict_read_next(iterator);
+  }
+  
+  if (configReceived){
+    // TODO: Reset screen
+  } else {
+    updateDataOnScreen();
+  }
+}
+
+
 
 static void inbox_dropped_callback(AppMessageResult reason, void *context) {
   APP_LOG(APP_LOG_LEVEL_ERROR, "Message dropped!");
@@ -292,6 +396,7 @@ static void main_window_unload(Window *window) {
 }
 
 void handle_init(void) {
+  read_configuration();
   my_window = window_create();
   
   window_set_window_handlers(my_window, (WindowHandlers){
@@ -317,6 +422,7 @@ void handle_init(void) {
 }
 
 void handle_deinit(void) {
+  save_configuration();
   window_destroy(my_window);
 }
 
