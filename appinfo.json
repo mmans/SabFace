@@ -7,6 +7,7 @@
         "CONFIG_SAB_PORT": 10,
         "CONFIG_SAB_USERNAME": 12,
         "CONFIG_SAB_USE_SSL": 8,
+        "CONFIG_SETTINGS": 99,
         "CONFIG_WATCH_INT_ACTIVE": 17,
         "CONFIG_WATCH_INT_IDLE": 16,
         "CONFIG_WATCH_VIB_FIN": 15,
@@ -27,6 +28,16 @@
     "projectType": "native",
     "resources": {
         "media": [
+            {
+                "file": "images/no_connection.png",
+                "name": "IMAGE_TELEMANS_NO_CONNECTION",
+                "type": "png"
+            },
+            {
+                "file": "images/refresh.png",
+                "name": "IMAGE_TELEMANS_REFRESH",
+                "type": "png"
+            },
             {
                 "file": "images/watchface.png",
                 "name": "IMAGE_TELEMANS_FACE",

@@ -2,11 +2,11 @@
  TODO:
    * Settings --> Struct
    * Vib-settings
-   * Int-settings
    * icon, not-connected
 */
 
 #include <pebble.h>
+
 #define KEY_VALID_CONNECTION  0
 #define KEY_MB_TOTAL 1
 #define KEY_MB_LEFT 2
@@ -25,18 +25,27 @@
 #define CONFIG_WATCH_VIB_FIN 15
 #define CONFIG_WATCH_INT_IDLE 16
 #define CONFIG_WATCH_INT_ACTIVE 17 
-
-static bool config_sab_use_ssl = false;
-static char config_sab_host[50] = "my.sabnzb.server";
-static int config_sab_port = 8080;
-static char config_sab_apikey[35] = "";
-static char config_sab_username[25] = "";
-static char config_sab_password[25] = "";
-static bool config_vibrate_new = false;
-static bool config_vibrate_finish = false;
-static int config_interval_idle = 900;
-static int config_interval_active = 10;
+#define CONFIG_SETTINGS 99
   
+#define CMD_REQUEST_UPDATE 1
+#define CMD_SEND_CONFIG 2
+  
+typedef struct sab_settings_struct{
+  bool config_sab_use_ssl;
+  char config_sab_host[50];
+  int config_sab_port;
+  char config_sab_apikey[35];
+  char config_sab_username[25];
+  char config_sab_password[25];
+  bool config_vibrate_new;
+  bool config_vibrate_finish;
+  int config_interval_idle;
+  int config_interval_active;
+} __attribute__((__packed__)) sab_settings_struct;
+
+
+sab_settings_struct sab_settings;
+
 bool init = true;
 Window *my_window;
 BitmapLayer *s_background_layer;
@@ -48,13 +57,18 @@ TextLayer *s_downloads_layer;
 BitmapLayer *s_speed_icon_layer;
 TextLayer *s_speed_layer;
 TextLayer *s_time_left_layer;
+BitmapLayer *s_refresh_layer;
+BitmapLayer *s_no_connection_layer;
 
 GFont *my_font;
 GBitmap *my_background;
 GBitmap *icon_downloads;
 GBitmap *icon_speed;
+GBitmap *refresh_icon;
+GBitmap *no_connection_icon;
 
-static int tick_counter = 0;
+static bool sab_gui_visible = false;
+static bool sab_valid_connection_prev = false;
 static bool sab_valid_connection = false;
 static uint32_t sab_mb_total = 0;
 static uint32_t sab_mb_left = 0;
@@ -64,6 +78,96 @@ static char sab_downloads_txt[3] = "000";
 static char sab_time_left[8] = "00:00:00";
 static char sab_speed[8] = "";
 static int sab_proc_left = 0;
+static int sab_current_interval = 30;
+
+char *translate_error(AppMessageResult result) {
+  switch (result) {
+    case APP_MSG_OK: return "APP_MSG_OK";
+    case APP_MSG_SEND_TIMEOUT: return "APP_MSG_SEND_TIMEOUT";
+    case APP_MSG_SEND_REJECTED: return "APP_MSG_SEND_REJECTED";
+    case APP_MSG_NOT_CONNECTED: return "APP_MSG_NOT_CONNECTED";
+    case APP_MSG_APP_NOT_RUNNING: return "APP_MSG_APP_NOT_RUNNING";
+    case APP_MSG_INVALID_ARGS: return "APP_MSG_INVALID_ARGS";
+    case APP_MSG_BUSY: return "APP_MSG_BUSY";
+    case APP_MSG_BUFFER_OVERFLOW: return "APP_MSG_BUFFER_OVERFLOW";
+    case APP_MSG_ALREADY_RELEASED: return "APP_MSG_ALREADY_RELEASED";
+    case APP_MSG_CALLBACK_ALREADY_REGISTERED: return "APP_MSG_CALLBACK_ALREADY_REGISTERED";
+    case APP_MSG_CALLBACK_NOT_REGISTERED: return "APP_MSG_CALLBACK_NOT_REGISTERED";
+    case APP_MSG_OUT_OF_MEMORY: return "APP_MSG_OUT_OF_MEMORY";
+    case APP_MSG_CLOSED: return "APP_MSG_CLOSED";
+    case APP_MSG_INTERNAL_ERROR: return "APP_MSG_INTERNAL_ERROR";
+    default: return "UNKNOWN ERROR";
+  }
+}
+
+// ----------------------------------------------------------------------------------------
+// ---- CONFIGURATION
+// ----------------------------------------------------------------------------------------
+void read_configuration(){
+  //APP_LOG(APP_LOG_LEVEL_INFO, "Reading configuration");
+  
+  if (persist_exists(CONFIG_SETTINGS)){
+    persist_read_data(CONFIG_SETTINGS, &sab_settings, sizeof(sab_settings));
+  } else {
+    // Set Defaults
+    sab_settings.config_sab_use_ssl = false,
+    strcpy(sab_settings.config_sab_host, "my.sabnzb.server");
+    sab_settings.config_sab_port = 80;
+    strcpy(sab_settings.config_sab_apikey, "");
+    strcpy(sab_settings.config_sab_username, "");
+    strcpy(sab_settings.config_sab_password, "");
+    sab_settings.config_vibrate_new = true;
+    sab_settings.config_vibrate_finish = true;
+    sab_settings.config_interval_idle = 900;
+    sab_settings.config_interval_active= 5;
+  }
+}
+
+void send_configuration(){
+    //APP_LOG(APP_LOG_LEVEL_INFO, "Sending configuration to phone");
+  
+    // Begin dictionary
+    DictionaryIterator *iter;
+    app_message_outbox_begin(&iter);
+
+    // Add a key-value pair
+    dict_write_uint8(iter, CMD_TYPE, CMD_SEND_CONFIG);
+    dict_write_int8(iter, CONFIG_SAB_USE_SSL, sab_settings.config_sab_use_ssl);
+    dict_write_cstring(iter, CONFIG_SAB_HOST, sab_settings.config_sab_host);
+    dict_write_int16(iter, CONFIG_SAB_PORT, sab_settings.config_sab_port);
+    dict_write_cstring(iter, CONFIG_SAB_APIKEY, sab_settings.config_sab_apikey);
+    dict_write_cstring(iter, CONFIG_SAB_USERNAME, sab_settings.config_sab_username);
+    dict_write_cstring(iter, CONFIG_SAB_PASSWORD, sab_settings.config_sab_password);
+    dict_write_int8(iter, CONFIG_WATCH_VIB_NEW, sab_settings.config_vibrate_new);
+    dict_write_int8(iter, CONFIG_WATCH_VIB_FIN, sab_settings.config_vibrate_finish);
+    dict_write_int16(iter, CONFIG_WATCH_INT_IDLE, sab_settings.config_interval_idle);
+    dict_write_int16(iter, CONFIG_WATCH_INT_ACTIVE, sab_settings.config_interval_active);
+  
+    // Send the message!
+    app_message_outbox_send();  
+}
+
+void save_configuration(){
+  persist_write_data(CONFIG_SETTINGS, &sab_settings, sizeof(sab_settings));
+}
+
+// ----------------------------------------------------------------------------------------
+// ---- COMMANDS
+// ----------------------------------------------------------------------------------------
+void request_update(){
+    DictionaryIterator *iter;
+    app_message_outbox_begin(&iter);
+
+    // Add a key-value pair
+    dict_write_uint8(iter, CMD_TYPE, CMD_REQUEST_UPDATE);
+
+    // Send the message!
+    app_message_outbox_send();
+}
+
+// ----------------------------------------------------------------------------------------
+// ---- UI
+// ----------------------------------------------------------------------------------------
 
 // Upgrade Progressbar
 static void update_progressbar(struct Layer *layer, GContext *ctx){
@@ -85,127 +189,96 @@ static void update_time(struct tm *tick_time){
   text_layer_set_text(s_time_layer, strbuf);
 }
 
+void showSabGUI(){
+  if (!sab_gui_visible){
+    layer_set_hidden(bitmap_layer_get_layer(s_downloads_icon_layer), false);
+    layer_set_hidden(bitmap_layer_get_layer(s_speed_icon_layer), false);
+    layer_set_hidden(s_progress_layer, false);
+    sab_gui_visible = true;
+  }
+}
+
+void hideSabGui(){
+  if (sab_gui_visible){
+    layer_set_hidden(bitmap_layer_get_layer(s_downloads_icon_layer), true);
+    layer_set_hidden(bitmap_layer_get_layer(s_speed_icon_layer), true);
+    layer_set_hidden(s_progress_layer, true);
+    text_layer_set_text(s_downloads_layer, "");
+    text_layer_set_text(s_speed_layer, "");
+    text_layer_set_text(s_time_left_layer, "");
+    sab_gui_visible = false;
+  }
+}
+
+static void updateDataOnScreen(){
+  //APP_LOG(APP_LOG_LEVEL_INFO, "Updating screen");
+  layer_set_hidden(bitmap_layer_get_layer(s_refresh_layer), true);
+  
+  if (sab_downloads_prev>-1){
+    if ((sab_settings.config_vibrate_new) && (sab_downloads > sab_downloads_prev)){
+      // New download detected
+      vibes_short_pulse();
+    } else if ((sab_settings.config_vibrate_finish) && (sab_downloads < sab_downloads_prev)){
+      // Download complete/aborted
+      vibes_double_pulse();
+    }
+  }
+  
+  if ((sab_downloads>0) && (sab_downloads_prev<=0)){
+    // Changing from IDLE to ACTIVE
+    sab_current_interval = sab_settings.config_interval_active;
+    showSabGUI();
+  } else if ((sab_downloads==0) && (sab_downloads_prev>0)){
+    // Changing from ACTIVE to IDLE
+    sab_current_interval = sab_settings.config_interval_idle;
+    hideSabGui();
+  }
+  
+  sab_downloads_prev = sab_downloads;
+  
+  if (sab_downloads>0){
+    // Show header
+    text_layer_set_text(s_speed_layer, sab_speed);
+    text_layer_set_text(s_downloads_layer, sab_downloads_txt);
+    text_layer_set_text(s_time_left_layer, sab_time_left);
+    layer_mark_dirty(s_progress_layer);
+  }
+}
+
+// TAPPING
+static void tap_handler(AccelAxisType axis, int32_t direction) {
+  // Update data
+  if (!sab_gui_visible && sab_valid_connection){
+    layer_set_hidden(bitmap_layer_get_layer(s_refresh_layer), false);
+    request_update();
+  }
+}
+
+// ----------------------------------------------------------------------------------------
+// ---- TICKER
+// ----------------------------------------------------------------------------------------
 static void tick_handler(struct tm *tick_time, TimeUnits units_changed){
   if (init || (units_changed & MINUTE_UNIT)) {
     update_time(tick_time);
     init = false;
   }
+  
+  static int tick_counter = 0;
   tick_counter++;
-  if (tick_counter>5){
+
+  if (tick_counter>sab_current_interval){
+    // Request update
     tick_counter=0;
-    // Begin dictionary
-    DictionaryIterator *iter;
-    app_message_outbox_begin(&iter);
-
-    //CMD_TYPE:
-    // 1 = Update data
-    // 2 = Send Config
-    
-    // Add a key-value pair
-    dict_write_uint8(iter, CMD_TYPE, 1);
-
-    // Send the message!
-    app_message_outbox_send();
+    request_update();
   }
 }
 
-static void read_configuration(){
-  config_sab_use_ssl = persist_read_bool(CONFIG_SAB_USE_SSL);
-  persist_read_string(CONFIG_SAB_HOST, config_sab_host, sizeof(config_sab_host));
-  config_sab_port = persist_read_int(CONFIG_SAB_PORT);
-  persist_read_string(CONFIG_SAB_APIKEY, config_sab_apikey, sizeof(config_sab_apikey));
-  persist_read_string(CONFIG_SAB_USERNAME, config_sab_username, sizeof(config_sab_username));
-  persist_read_string(CONFIG_SAB_PASSWORD, config_sab_password, sizeof(config_sab_password));
-  config_vibrate_new = persist_read_bool(CONFIG_WATCH_VIB_NEW);
-  config_vibrate_finish = persist_read_bool(CONFIG_WATCH_VIB_FIN);
-  config_interval_idle = persist_read_int(CONFIG_WATCH_INT_IDLE);
-  config_interval_active = persist_read_int(CONFIG_WATCH_INT_ACTIVE);
-}
 
-static void send_configuration(){
-    APP_LOG(APP_LOG_LEVEL_INFO, "Sending configuration");
-    // Begin dictionary
-    DictionaryIterator *iter;
-    app_message_outbox_begin(&iter);
-
-    //CMD_TYPE:
-    // 1 = Update data
-    // 2 = Send Config
-    
-    // Add a key-value pair
-    dict_write_uint8(iter, CMD_TYPE, 2);
-    dict_write_int8(iter, CONFIG_SAB_USE_SSL, config_sab_use_ssl);
-    dict_write_cstring(iter, CONFIG_SAB_HOST, config_sab_host);
-    dict_write_int16(iter, CONFIG_SAB_PORT, config_sab_port);
-    dict_write_cstring(iter, CONFIG_SAB_APIKEY, config_sab_apikey);
-    dict_write_cstring(iter, CONFIG_SAB_USERNAME, config_sab_username);
-    dict_write_cstring(iter, CONFIG_SAB_PASSWORD, config_sab_password);
-    dict_write_int8(iter, CONFIG_WATCH_VIB_NEW, config_vibrate_new);
-    dict_write_int8(iter, CONFIG_WATCH_VIB_FIN, config_vibrate_finish);
-    dict_write_int16(iter, CONFIG_WATCH_INT_IDLE, config_interval_idle);
-    dict_write_int16(iter, CONFIG_WATCH_INT_ACTIVE, config_interval_active);
-  
-    // Send the message!
-    app_message_outbox_send();  
-}
-
-static void save_configuration(){
-  persist_write_bool(CONFIG_SAB_USE_SSL, config_sab_use_ssl);
-  persist_write_string(CONFIG_SAB_HOST, config_sab_host);
-  persist_write_int(CONFIG_SAB_PORT, config_sab_port);
-  persist_write_string(CONFIG_SAB_APIKEY, config_sab_apikey);
-  persist_write_string(CONFIG_SAB_USERNAME, config_sab_username);
-  persist_write_string(CONFIG_SAB_PASSWORD, config_sab_password);
-  persist_write_bool(CONFIG_WATCH_VIB_NEW, config_vibrate_new);
-  persist_write_bool(CONFIG_WATCH_VIB_FIN, config_vibrate_finish);
-  persist_write_int(CONFIG_WATCH_INT_IDLE, config_interval_idle);
-  persist_write_int(CONFIG_WATCH_INT_ACTIVE, config_interval_active);
-}
-
-static void updateDataOnScreen(){
-  if ((sab_downloads_prev>-1) && (sab_downloads > sab_downloads_prev)){
-    // New download detected
-    vibes_short_pulse();
-  } else if (sab_downloads < sab_downloads_prev){
-    // Download complete/aborted
-    vibes_double_pulse();
-  }
-  sab_downloads_prev = sab_downloads;
-  
-  if (sab_downloads>0){
-    // Show header
-    if (layer_get_hidden(bitmap_layer_get_layer(s_downloads_icon_layer))){
-      layer_set_hidden(bitmap_layer_get_layer(s_downloads_icon_layer), false);
-      layer_set_hidden(bitmap_layer_get_layer(s_speed_icon_layer), false);
-    }
-    text_layer_set_text(s_speed_layer, sab_speed);
-    text_layer_set_text(s_downloads_layer, sab_downloads_txt);
-  } else if (!layer_get_hidden(bitmap_layer_get_layer(s_downloads_icon_layer))){
-    // Hide header
-    layer_set_hidden(bitmap_layer_get_layer(s_downloads_icon_layer), true);
-    layer_set_hidden(bitmap_layer_get_layer(s_speed_icon_layer), true);
-    text_layer_set_text(s_downloads_layer, "");
-    text_layer_set_text(s_speed_layer, "");
-  }
-  
-  
-  if (sab_mb_left > 0){
-    text_layer_set_text(s_time_left_layer, sab_time_left);
-    if (layer_get_hidden(s_progress_layer)) {
-      layer_set_hidden(s_progress_layer, false);
-    } else {
-      layer_mark_dirty(s_progress_layer);
-    }
-  } else if (!layer_get_hidden(s_progress_layer)) {
-    layer_set_hidden(s_progress_layer, true);
-    text_layer_set_text(s_time_left_layer, "");
-  }
-  
-}
-
-// Communication
-
+// ----------------------------------------------------------------------------------------
+// ---- APP MESSAGE HANDLING
+// ----------------------------------------------------------------------------------------
 static void inbox_received_callback(DictionaryIterator *iterator, void *context) {
+  //APP_LOG(APP_LOG_LEVEL_INFO, "Processing incomming app message!");
  // Read first item
   Tuple *t = dict_read_first(iterator);
   
@@ -216,7 +289,7 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
     // Which key was received?
     switch(t->key) {
     case KEY_VALID_CONNECTION: 
-      sab_valid_connection = (bool) t->value;
+      sab_valid_connection = t->value->int8;
       break;
     case KEY_MB_TOTAL:
       sab_mb_total = t->value->uint32;
@@ -238,38 +311,39 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
       sab_proc_left = t->value->int16;
       break;
     case CONFIG_SAB_USE_SSL:
-      config_sab_use_ssl = t->value->int8;
+      sab_settings.config_sab_use_ssl = t->value->int8;
       break;
     case CONFIG_SAB_HOST:
-      snprintf(config_sab_host, sizeof(config_sab_host), "%s", t->value->cstring);
+      snprintf(sab_settings.config_sab_host, sizeof(sab_settings.config_sab_host), "%s", t->value->cstring);
       break;
     case CONFIG_SAB_PORT:
-      config_sab_port = t->value->int16;
+      sab_settings.config_sab_port = t->value->int16;
       break;
     case CONFIG_SAB_APIKEY:
-      snprintf(config_sab_apikey, sizeof(config_sab_apikey), "%s", t->value->cstring);
+      snprintf(sab_settings.config_sab_apikey, sizeof(sab_settings.config_sab_apikey), "%s", t->value->cstring);
       break;
     case CONFIG_SAB_USERNAME:
-      snprintf(config_sab_username, sizeof(config_sab_username), "%s", t->value->cstring);
+      snprintf(sab_settings.config_sab_username, sizeof(sab_settings.config_sab_username), "%s", t->value->cstring);
       break;
     case CONFIG_SAB_PASSWORD:
-      snprintf(config_sab_password, sizeof(config_sab_password), "%s", t->value->cstring);
+      snprintf(sab_settings.config_sab_password, sizeof(sab_settings.config_sab_password), "%s", t->value->cstring);
       break;
     case CONFIG_WATCH_VIB_NEW:
-      config_vibrate_new = t->value->int8;
+      sab_settings.config_vibrate_new = t->value->int8;
       break;
     case CONFIG_WATCH_VIB_FIN:
-      config_vibrate_finish = t->value->int8;
+      sab_settings.config_vibrate_finish = t->value->int8;
       break;
     case CONFIG_WATCH_INT_IDLE:
-      config_interval_idle = t->value->int16;
+      sab_settings.config_interval_idle = t->value->int16;
       break;
     case CONFIG_WATCH_INT_ACTIVE:
-      config_interval_active = t->value->int16;
+      sab_settings.config_interval_active = t->value->int16;
+      configReceived = true;
       break;
     
     default:
-      APP_LOG(APP_LOG_LEVEL_ERROR, "Key %d not recognized!", (int)t->key);
+      //APP_LOG(APP_LOG_LEVEL_ERROR, "Key %d not recognized!", (int)t->key);
       break;
     }
     
@@ -278,28 +352,43 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
   }
   
   if (configReceived){
-    // TODO: Reset screen
+    //APP_LOG(APP_LOG_LEVEL_DEBUG, "Config received");
+    hideSabGui();
+    request_update();
   } else {
-    updateDataOnScreen();
+    //APP_LOG(APP_LOG_LEVEL_DEBUG, "Data received (%d,%d)", sab_valid_connection, sab_valid_connection_prev);
+    if (sab_valid_connection && !sab_valid_connection_prev){
+      // Connection is OK now
+      layer_set_hidden(bitmap_layer_get_layer(s_no_connection_layer), true);
+      //APP_LOG(APP_LOG_LEVEL_DEBUG, "Connection valid!!!");
+    } else if (!sab_valid_connection){
+      // Connetion id NOK now
+      //APP_LOG(APP_LOG_LEVEL_DEBUG, "Connection not valid!!!");
+      hideSabGui();
+      layer_set_hidden(bitmap_layer_get_layer(s_no_connection_layer), false);
+    }
+    
+    sab_valid_connection_prev = sab_valid_connection;
+    
+    if (sab_valid_connection) updateDataOnScreen();
   }
 }
 
-
-
 static void inbox_dropped_callback(AppMessageResult reason, void *context) {
-  APP_LOG(APP_LOG_LEVEL_ERROR, "Message dropped!");
+  //APP_LOG(APP_LOG_LEVEL_ERROR, "Message dropped! (%s)", translate_error(reason));
 }
 
 static void outbox_failed_callback(DictionaryIterator *iterator, AppMessageResult reason, void *context) {
-  APP_LOG(APP_LOG_LEVEL_ERROR, "Outbox send failed!");
+  //APP_LOG(APP_LOG_LEVEL_ERROR, "Outbox send failed!");
 }
 
 static void outbox_sent_callback(DictionaryIterator *iterator, void *context) {
-  APP_LOG(APP_LOG_LEVEL_INFO, "Outbox send success!");
+  //APP_LOG(APP_LOG_LEVEL_INFO, "Outbox send success!");
 }
 
-// Initialisation
-
+// ----------------------------------------------------------------------------------------
+// ---- INIT / DEINIT
+// ----------------------------------------------------------------------------------------
 static void main_window_load(Window *window) {
   // Load background
   my_background = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_TELEMANS_FACE);
@@ -379,7 +468,22 @@ static void main_window_load(Window *window) {
   text_layer_set_background_color(s_time_left_layer, GColorClear);
   layer_add_child(window_get_root_layer(window), text_layer_get_layer(s_time_left_layer));
  
-  APP_LOG(APP_LOG_LEVEL_INFO, "Init complete!");
+  // Add Refresh Icon
+  refresh_icon = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_TELEMANS_REFRESH);
+  s_refresh_layer = bitmap_layer_create(GRect(56, 120, 32, 32));
+  layer_set_hidden(bitmap_layer_get_layer(s_refresh_layer), true);
+  bitmap_layer_set_bitmap(s_refresh_layer, refresh_icon);
+  layer_add_child(window_get_root_layer(window), bitmap_layer_get_layer(s_refresh_layer));
+
+  // Add Refresh Icon
+  no_connection_icon = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_TELEMANS_NO_CONNECTION);
+  s_no_connection_layer = bitmap_layer_create(GRect(56, 120, 32, 32));
+  layer_set_hidden(bitmap_layer_get_layer(s_no_connection_layer), true);
+  bitmap_layer_set_bitmap(s_no_connection_layer, no_connection_icon);
+  layer_add_child(window_get_root_layer(window), bitmap_layer_get_layer(s_no_connection_layer));
+
+  
+  //APP_LOG(APP_LOG_LEVEL_INFO, "Init complete!");
   
 }
 
@@ -392,11 +496,11 @@ static void main_window_unload(Window *window) {
   text_layer_destroy(s_speed_layer);
   bitmap_layer_destroy(s_speed_icon_layer);
   layer_destroy(s_progress_layer);
+  bitmap_layer_destroy(s_no_connection_layer);
   fonts_unload_custom_font(my_font);
 }
 
-void handle_init(void) {
-  read_configuration();
+void handle_init(void) { 
   my_window = window_create();
   
   window_set_window_handlers(my_window, (WindowHandlers){
@@ -417,11 +521,17 @@ void handle_init(void) {
   // Open AppMessage
   app_message_open(app_message_inbox_size_maximum(), app_message_outbox_size_maximum());
   
-  // Send Config to Phone
+  // Tap service
+  accel_tap_service_subscribe(tap_handler);
+  
+  // Read and send config to Phone
+  read_configuration();
   send_configuration();
 }
 
 void handle_deinit(void) {
+  accel_tap_service_unsubscribe();
+  app_message_deregister_callbacks();
   save_configuration();
   window_destroy(my_window);
 }

@@ -1,3 +1,5 @@
+var init = true;
+
 var sabMeta = {
   baseUrl : '',
   baseAUrl : '',
@@ -15,27 +17,35 @@ var sabData = {
 
 var sabConfig = {
   sab_use_ssl : false,
-  sab_host : 'ed2oyecdfpgenbgy.myfritz.net',
-  sab_port : 20378,
-  sab_apikey : '848da14248a198fe4032209c3de39453',
-  sab_username : 'admin',
-  sab_password : 'ild!98',
+  sab_host : '',
+  sab_port : 80,
+  sab_apikey : '',
+  sab_username : '',
+  sab_password : '',
   watch_vibrateOnNewDownload: true,
 	watch_vibrateOnDownloadFinished: true,
 	watch_intervalIdle: 900,
 	watch_intervalActive: 10
 };
 
-var xhrRequest = function (url, type, callback) {
+var xhrRequest = function (url, type, callback, errorCallback) {
   var xhr = new XMLHttpRequest();
-  xhr.onload = function () {
-    callback(this.responseText);
+  xhr.timeout=10000;
+  xhr.onreadystatechange = function () {
+    //console.log("[xhrRequest] status="+xhr.status);
+    if (xhr.readyState==4 && xhr.status==200) {
+      callback(xhr.responseText);
+    }
   };
+  xhr.onerror = errorCallback;
   xhr.open(type, url);
   xhr.send();
 };
 
-function getAuthenticationMethod(){
+function initSabConnection(){
+  //console.log("[initSabConnection] Enter");
+  sabMeta.valid = false;
+  
   if (sabConfig.use_ssl){
     sabMeta.baseUrl = "https://";
   } else {
@@ -43,34 +53,58 @@ function getAuthenticationMethod(){
   }
   
   sabMeta.baseUrl += sabConfig.sab_host+":"+sabConfig.sab_port+"/sabnzbd/api?";
-  console.log("Base Url = " + sabMeta.baseUrl);
-
-  xhrRequest(sabMeta.baseUrl+"mode=auth", "GET", function(responseText){
-    switch(responseText.trim()){
-      case "None":
-        sabMeta.valid = true;
-        sabMeta.baseAUrl = sabMeta.baseUrl;
-        break;
-      case "apikey":
-        sabMeta.valid = true;
-        sabMeta.baseAUrl = sabMeta.baseUrl+"apikey="+sabConfig.sab_apikey+"&";
-        break;
-      case "login":
-        sabMeta.valid = true;
-        sabMeta.baseAUrl = sabMeta.baseUrl+"ma_username="+sabConfig.sab_username+"&ma_password="+sabConfig.sab_password+"&";
-        break;
-      default:
-        sabMeta.valid = false;
-        break;
-    }       
-    if (sabMeta.valid) updateSabData();
-  });
+  //console.log("[initSabConnection] Base Url = " + sabMeta.baseUrl);
+  //console.log("[initSabConnection] Valid = " + sabMeta.valid);
+  try{
+   // console.log("[initSabConnection] Fetching Auth Method");
+    xhrRequest(sabMeta.baseUrl+"mode=auth", "GET", function(responseText){
+      //console.log("[initSabConnection] [XHR Callback] Get Auth Method result: ", responseText);
+      switch(responseText.trim()){
+        case "None":
+          sabMeta.valid = true;
+          sabMeta.baseAUrl = sabMeta.baseUrl;
+          break;
+        case "apikey":
+          sabMeta.valid = true;
+          sabMeta.baseAUrl = sabMeta.baseUrl+"apikey="+sabConfig.sab_apikey+"&";
+          break;
+        case "login":
+          sabMeta.valid = true;
+          sabMeta.baseAUrl = sabMeta.baseUrl+"ma_username="+sabConfig.sab_username+"&ma_password="+sabConfig.sab_password+"&";
+          break;
+        default:
+          sabMeta.valid = false;
+          break;
+      }    
+      if (sabMeta.valid) {fetchSabData();}
+      sendDataToPebble();
+    }, function(){
+      // ON ERROR
+      sabMeta.valid=false;
+      sendDataToPebble();
+    });
+  }catch(e){
+    //console.log("Error while fetching authentication mode!", e);
+  }
+  //console.log("[initSabConnection] Exit");
 }
 
 
-function updateSabData(){
-  console.log('Updating SabData...');
+function update(){
+  //console.log('[update] Enter');
+  if (!sabMeta.valid){
+    initSabConnection();
+  } else {
+    fetchSabData();
+  }
+  //console.log('[update] Exit');
+}
+
+function fetchSabData(){
+  //console.log('[fetchSabData] Enter');
+  if (sabMeta.valid){
   xhrRequest(sabMeta.baseAUrl+"mode=qstatus&output=json", "GET", function(responseText){
+    //console.log('[update] [XHR Callback] Enter');
     var json = JSON.parse(responseText);
     sabData.mbtotal = json.mb * 100;
     sabData.mbleft = json.mbleft * 100;
@@ -82,14 +116,23 @@ function updateSabData(){
       sabData.procleft = Math.round((sabData.mbleft / sabData.mbtotal)*100);
     }
     sendDataToPebble();
-  });
+  }, function(){
+      // ON ERROR
+      sabMeta.valid=false;
+      sendDataToPebble();
+    });
+  }
   
-  
+  sendDataToPebble();
+  //console.log('[fetchSabData] Exit');
 }
 
 function sendDataToPebble(){
+  //console.log("[sendDataToPebble] Enter");
+  //console.log("2Valid = " + sabMeta.valid);
+
   var dict = {
-    "KEY_VALID_CONNECTION" : sabMeta.valid,
+    "KEY_VALID_CONNECTION" : sabMeta.valid?1:0,
     "KEY_MB_TOTAL" : sabData.mbtotal,
     "KEY_MB_LEFT" : sabData.mbleft,
     "KEY_DOWNLOADS" : sabData.downloads,
@@ -100,11 +143,13 @@ function sendDataToPebble(){
   
   Pebble.sendAppMessage(dict,
     function(e){
-      console.log("Data send successfull!");
+      //console.log("[sendDataToPebble] [App Message Callback] Data send successfull!");
     },
     function(e){
-      console.log("Error while sending data!");
+      //console.log("[sendDataToPebble] [App Message Callback] Error while sending data!");
     });
+
+  //console.log("[sendDataToPebble] Exit");
 }
 
 
@@ -113,8 +158,7 @@ function sendDataToPebble(){
 */
 Pebble.addEventListener('ready', 
   function(e) {
-    console.log("PebbleKit JS ready!");
-    getAuthenticationMethod();
+    //console.log("PebbleKit JS ready!");
   }
 );
 
@@ -123,9 +167,9 @@ Pebble.addEventListener('ready',
 */
 Pebble.addEventListener("showConfiguration",
   function(e) {
-    console.log('Show Config');
+    //console.log('Show Config');
     var configJson = encodeURIComponent(JSON.stringify(sabConfig));
-    console.log("Opening url: " + "http://pebble.telemans.de/sabface-config.html#/?config="+configJson);
+    //console.log("Opening url: " + "http://pebble.telemans.de/sabface-config.html#/?config="+configJson);
     //Load the remote config page
     Pebble.openURL("http://pebble.telemans.de/sabface-config.html#/?config="+configJson);
   }
@@ -136,10 +180,10 @@ Pebble.addEventListener("showConfiguration",
 */
 Pebble.addEventListener('webviewclosed',
   function(e) {
-    console.log('Configuration window returned: ' + e.response);
-    if (e.response == 'cancel'){
+    //console.log('Configuration window returned: ' + e.response);
+    if ((e.response === '') || (e.response == 'cancel')){
       // User clicked cancel
-      console.log("User Clicked CANCEL");
+      //console.log("User Clicked CANCEL");
     } else {
       sabConfig = JSON.parse(decodeURIComponent(e.response));
       sabMeta.valid = false;
@@ -153,16 +197,12 @@ Pebble.addEventListener('appmessage',
   function(e) {
     var cmd_type=0;
     cmd_type = e.payload.CMD_TYPE;
-    console.log("AppMessage received --> " + cmd_type);
+    //console.log("AppMessage received --> " + cmd_type);
     
     switch (cmd_type){
       case 1:
         // Update data
-        if (sabMeta.valid){
-          updateSabData();
-        } else {
-          getAuthenticationMethod();
-        }
+        update();
       break;
     case 2:
         // Receiving configuration
@@ -176,6 +216,11 @@ Pebble.addEventListener('appmessage',
         sabConfig.watch_vibrateOnDownloadFinished = e.payload.CONFIG_WATCH_VIB_FIN;
         sabConfig.watch_intervalIdle = e.payload.CONFIG_WATCH_INT_IDLE;
         sabConfig.watch_intervalActive = e.payload.CONFIG_WATCH_INT_ACTIVE;
+        
+        if (init){
+          init = false;
+          update();
+        }
         break;
   }
   }                     
@@ -197,10 +242,10 @@ function sendConfigToPebble(){
   
   Pebble.sendAppMessage(dict,
     function(e){
-      console.log("Data send successfull!");
+      //console.log("Configuration data send successfull!");
     },
     function(e){
-      console.log("Error while sending data!");
+      //console.log("Error while sending configuration data!");
     });
   
 }
